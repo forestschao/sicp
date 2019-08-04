@@ -139,3 +139,116 @@
                                 (/ 1 (stream-car s2))))))
 (define tan-series
   (div-series sine-series cosine-series))
+
+; 3.63
+; Reasoner version is 1 + 2 + 3 + 4 + ... guess
+(define (sqrt-improve guess x)
+  (begin
+    (display "guess: ")
+    (displayln guess)
+    (average guess (/ x guess))))
+(define (average a b)
+  (/ (+ a b) 2))
+
+(define (sqrt-stream x)
+  (define guess
+  (stream-cons 1.0
+               (stream-map (lambda (guess)
+                             (sqrt-improve guess x))
+                           guess)))
+  guess)
+
+; 3.64
+(define (stream-limit s tolerance)
+  (cond ((stream-empty? s) (error "empty-stream"))
+        ((stream-empty? (stream-cdr s)) (stream-car s))
+        (else
+         (let ((s1 (stream-car s))
+               (s2 (stream-car (stream-cdr s))))
+           (if (< (abs (- s1 s2)) tolerance)
+               s2
+               (stream-limit (stream-cdr s) tolerance))))))
+
+(define (sqrt-tolerate x tolerance)
+  (stream-limit (sqrt-stream x) tolerance))
+
+; 3.65
+(define (log2-summands n)
+  (stream-cons (/ 1 n)
+               (stream-map - (log2-summands (+ n 1)))))
+
+(define ln2
+  (partial-sums (log2-summands 1)))
+
+(define (square x)
+  (* x x))
+
+(define (euler-transform s)
+  (let ((s0 (stream-ref s 0))
+        (s1 (stream-ref s 1))
+        (s2 (stream-ref s 2)))
+    (stream-cons (- s2 (/ (square (- s2 s1))
+                          (+ s0 (* -2 s1) s2)))
+                 (euler-transform (stream-cdr s)))))
+
+(define (make-tableau transform s)
+  (stream-cons s
+               (make-tableau transform
+                             (transform s))))
+(define (accelerate-sequence transform s)
+  (stream-map stream-car (make-tableau transform s)))
+
+; 3.66
+(define (pairs s t)
+  (stream-cons
+   (list (stream-car s) (stream-car t))
+   (interleave
+    (stream-map (lambda (x) (list (stream-car s) x))
+                (stream-cdr t))
+    (pairs (stream-cdr s) (stream-cdr t)))))
+
+(define (interleave s t)
+  (if (stream-empty? s)
+      t
+      (stream-cons (stream-car s)
+                   (interleave t (stream-cdr s)))))
+
+; 3.67
+(define (pairs-all s t)
+  (stream-cons
+   (list (stream-car s) (stream-car t))
+   (interleave
+    (stream-map (lambda (x) (list (stream-car s) x))
+                (stream-cdr t))
+    (pairs-all (stream-cdr s) t))))
+
+; 3.68
+; infinite loop
+;(define (pairs-inf s t)
+;  (interleave
+;   (stream-map (lambda (x) (list (stream-car s) x))
+;               t)
+;   (pairs-inf (stream-cdr s) (stream-cdr t))))
+
+; 3.69
+(define (triples s t u)
+  (stream-cons
+   (list (stream-car s)
+         (stream-car t)
+         (stream-car u))
+   (interleave
+    (stream-map (lambda (x) (list* (stream-car s) x))
+                (stream-cdr (pairs t u)))
+
+    (triples (stream-cdr s)
+             (stream-cdr t)
+             (stream-cdr u)))))
+
+(define pythagorean
+  (stream-filter (lambda (x)
+                   (let ((s1 (list-ref x 0))
+                         (s2 (list-ref x 1))
+                         (s3 (list-ref x 2)))
+                     (= (+ (square s1) (square s2))
+                        (square s3))))
+                 (triples integers integers integers)))
