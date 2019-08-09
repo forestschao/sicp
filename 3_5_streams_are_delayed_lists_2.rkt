@@ -252,3 +252,213 @@
                      (= (+ (square s1) (square s2))
                         (square s3))))
                  (triples integers integers integers)))
+
+; 3.70
+(define (merge-weighted s1 s2 weight)
+  (cond ((stream-empty? s1) s2)
+        ((stream-empty? s2) s1)
+        (else
+         (let ((s1car (stream-car s1))
+               (s2car (stream-car s2)))
+           (cond ((<= (weight s1car) (weight s2car))
+                  (stream-cons s1car
+                               (merge-weighted (stream-cdr s1) s2 weight)))
+                 (else
+                  (stream-cons s2car
+                               (merge-weighted s1 (stream-cdr s2) weight))))))))
+
+(define (weighted-pairs s t weight)
+  (stream-cons
+   (list (stream-car s) (stream-car t))
+   (merge-weighted
+    (stream-map (lambda (x) (list (stream-car s) x))
+                (stream-cdr t))
+    (weighted-pairs (stream-cdr s) (stream-cdr t) weight)
+    weight)))
+
+(define order-pair (weighted-pairs integers integers
+                                   (lambda (x)
+                                     (+ (list-ref x 0)
+                                        (list-ref x 1)))))
+(define no-235
+  (stream-filter (lambda (x)
+                   (and (> (remainder x 2) 0)
+                        (> (remainder x 3) 0)
+                        (> (remainder x 5) 0)))
+                 integers))
+
+(define stream-235
+  (weighted-pairs no-235 no-235
+                  (lambda (x)
+                    (+ (* 2 (list-ref x 0))
+                       (* 3 (list-ref x 1))
+                       (* 5 (list-ref x 0) (list-ref x 1))))))
+
+; 3.71
+(define (cube x)
+  (* x x x))
+
+(define (cube-sum x)
+  (+ (cube (list-ref x 0))
+     (cube (list-ref x 1))))
+
+(define cube-stream
+  (weighted-pairs integers integers
+                  cube-sum))
+
+(define (reduce s weight)
+  (let ((w1 (weight (stream-car s)))
+        (w2 (weight (stream-car (stream-cdr s)))))
+    (if (= w1 w2)
+        (stream-cons w2 (reduce (stream-cdr (stream-cdr s)) weight))
+        (reduce (stream-cdr s) weight))))
+
+(define ramanujan
+  (reduce cube-stream cube-sum))
+
+; 3.72
+(define (square-sum x)
+  (+ (square (list-ref x 0))
+     (square (list-ref x 1))))
+
+(define (reduce-diff s weight num)
+  (define (skip s num)
+    (if (= num 1)
+        s
+        (skip (stream-cdr s) (- num 1))))
+  (let ((w1 (weight (stream-car s)))
+        (wn (weight (stream-car (skip s num)))))
+    (if (= w1 wn)
+        (stream-cons wn (reduce-diff (skip s (+ num 1))
+                                     weight
+                                     num))
+        (reduce-diff (stream-cdr s) weight num))))
+
+(define three-squares
+  (reduce-diff (weighted-pairs integers integers square-sum)
+               square-sum
+               3))
+
+; 3.73
+(define (integral integrand initial-value dt)
+  (define int
+    (stream-cons initial-value
+                 (add-streams (scale-stream integrand dt)
+                              int)))
+  int)
+
+(define (RC R C dt)
+  (lambda (i v0)
+    (add-streams
+     (integral (scale-stream i (/ 1 C)) v0 dt)
+     (scale-stream i R))))
+
+; 3.74
+; (define zero-crossings
+;   (stream-map sign-change-detector sense-data
+;                                    (stream-cons 0
+;                                                 sense-data)))
+
+; 3.75
+; (define (make-zero-crossings input-stream last-value last-avpt)
+;   (let ((avpt (/ (+ (stream-car input-stream) last-value) 2)))
+;     (cons-stream (sign-change-detector avpt last-avpt)
+;                  (make-zero-crossings (stream-cdr input-stream)
+;                                       (stream-car input-stream)
+;                                       avpt))))
+
+; 3.76
+;(define (smooth s)
+;  (stream-map average s (stream-cdr s)))
+
+; 3.77
+(define (delay-integral delay-integrand initial-value dt)
+  (stream-cons initial-value
+               (let ((integrand (force delay-integrand)))
+                 (if (stream-empty? integrand)
+                     empty-stream
+                     (integral (stream-cdr integrand)
+                               (+ (* dt (stream-car integrand))
+                                  initial-value)
+                               dt)))))
+
+(define (solve f y0 dt)
+  (define y (delay-integral (delay dy) y0 dt))
+  (define dy (stream-map f y))
+  y)
+
+; (stream-ref (solve (lambda (y) y) 1 0.001) 1000)
+
+; 3.78
+(define (solve-2nd a b dt y0 dy0)
+  (define y (delay-integral (delay dy) y0 dt))
+  (define dy (delay-integral (delay ddy) dy0 dt))
+  (define ddy (add-streams (scale-stream y b)
+                           (scale-stream dy a)))
+  y)
+
+; 3.79
+(define (solve-2nd-generalize f y0 dy0 dt)
+  (define y (delay-integral (delay dy) y0 dt))
+  (define dy (delay-integral (delay ddy) dy0 dt))
+  (define ddy (stream-map f dy y))
+  y)
+
+; 3.80
+(define (RLC R L C dt)
+  (lambda (vc0 il0)
+    (define vc (delay-integral (delay dvc) vc0 dt))
+    (define il (delay-integral (delay dil) il0 dt))
+    (define dvc (scale-stream il (/ -1 C)))
+    (define dil (add-streams (scale-stream il (- (/ R L)))
+                             (scale-stream vc (/ 1 L))))
+    (cons vc il)))
+
+; 3.81
+(define (stream-map-generalize f s1 s2)
+  (stream-cons (f (stream-car s1) (stream-car s2))
+               (stream-map-generalize f
+                                      (stream-cdr s1)
+                                      (stream-cdr s2))))
+
+(define (rand-update x) 
+  (modulo (+ 101 (* x 713)) 53)) 
+
+(define random-init (rand-update 10))
+
+ (define (rand requests)
+   (define (process request last)
+     (if (eq? request "generate")
+         (rand-update last)
+         (cdr request)))
+   (define rand-result
+     (stream-cons random-init
+                  (stream-map-generalize process requests rand-result)))
+   (stream-cdr rand-result))
+
+(define test-requests
+  (stream-cons (cons "reset" 5)
+    (stream-cons "generate"
+      (stream-cons "generate"
+        (stream-cons (cons "reset" 5)
+          (stream-cons "generate"
+            (stream-cons "generate"
+              (stream-cons (cons "reset" 5)
+                (stream-cons "generate"
+                  empty-stream)))))))))
+
+; 3.82
+(define (monte-carlo experiment-stream passed failed)
+  (define (next passed failed)
+    (stream-cons
+     (/ passed (+ passed failed))
+     (monte-carlo
+      (stream-cdr experiment-stream) passed failed)))
+  (if (stream-car experiment-stream)
+      (next (+ passed 1) failed)
+      (next passed (+ failed 1))))
+
+; (define (estimate-integral P x1 x2 y1 y2)
+;   (scale-stream (monte-carlo (stream-map P rand-points))
+;                 (* (- x2 x1) (- y2 y1))))
+
