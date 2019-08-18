@@ -70,12 +70,12 @@
 ; (1 (2 (3 4)))
 
 ; 2.25
-(car (cdaddr (list 1 3 (list 5 7) 9)))
+; (car (cdaddr (list 1 3 (list 5 7) 9)))
 
-(caar (list (list 7)))
+; (caar (list (list 7)))
  
 (define long-list (list 1 (list 2 (list 3 (list 4 (list 5 (list 6 7)))))))
-(cadadr (cadadr (cadadr long-list)))
+; (cadadr (cadadr (cadadr long-list)))
 
 ; 2.26
 ; (append x y): (1 2 3 4 5 6
@@ -163,4 +163,258 @@
                           (make-mobile 
                            (make-branch 5 8) 
                            (make-branch 10 4))))) 
-      
+
+; 2.30
+(define (square-tree-rec tree)
+  (cond ((null? tree) empty)
+        ((not (pair? tree)) (square tree))
+        (else (cons (square-tree-rec (car tree))
+                    (square-tree-rec (cdr tree))))))
+
+(define (square-tree-map tree)
+  (map (lambda (subtree)
+         (if (pair? subtree)
+             (square-tree-map subtree)
+             (square subtree)))
+       tree))
+
+(define tree-a
+  (list 1
+        (list 2 (list 3 4) 5)
+        (list 6 7)))
+
+; 2.31
+(define (tree-map f tree)
+  (map (lambda (subtree)
+         (if (pair? subtree)
+             (tree-map f subtree)
+             (f subtree)))
+       tree))
+
+; 2.32
+; empty -> (())
+; first, rest = all the subsets without the first
+;             + all the subsets with the first
+;             = (subsets (cdr s)) + (first + (subsets (cdr s)))
+(define (subsets s)
+  (if (null? s)
+      (list empty)
+      (let ((rest (subsets (cdr s))))
+        (append rest
+                (map (lambda (x)
+                       (cons (car s) x))
+                     rest)))))
+
+; 2.33
+(define (accumulate op initial sequence)
+  (if (null? sequence)
+      initial
+      (op (car sequence)
+          (accumulate op initial (cdr sequence)))))
+
+(define (map-acc p sequence)
+  (accumulate (lambda (x y)
+                (cons (p x) y))
+              empty
+              sequence))
+
+(define (append-acc seq1 seq2)
+  (accumulate cons seq2 seq1))
+
+(define (length-acc sequence)
+  (accumulate (lambda (x y)
+                (+ y 1))
+              0
+              sequence))
+
+; 2.34
+(define (horner-eval x coefficient-sequence)
+  (accumulate (lambda (this-coefficient higher-terms)
+                (+ this-coefficient
+                   (* higher-terms x)))
+              0
+              coefficient-sequence))
+
+; 2.35
+(define (count-leaves-acc t)
+  (accumulate +
+              0
+              (map (lambda (subtree)
+                     (cond ((null? subtree) 0)
+                           ((not (pair? subtree)) 1)
+                           (else (count-leaves-acc subtree))))
+                   t)))
+
+; 2.36
+(define (accumulate-n op init seqs)
+  (if (null? (car seqs))
+      empty
+      (cons (accumulate op init (map car seqs))
+            (accumulate-n op init (map cdr seqs)))))
+
+; 2.37
+(define v (list 1 2 3 4))
+(define m (list
+           (list 1 2 3 4)
+           (list 4 5 6 6)
+           (list 6 7 8 9)))
+(define n (list
+           (list 1 10)
+           (list 2 20)
+           (list 3 30)
+           (list 4 40)))
+
+(define (dot-product v w)
+  (accumulate + 0 (map * v w)))
+
+(define (matrix-*-vector m v)
+  (map (lambda (row)
+         (dot-product row v))
+       m))
+
+(define (transpose mat)
+  (accumulate-n cons empty mat))
+
+(define (matrix-*-matrix m n)
+  (let ((cols (transpose n)))
+    (map (lambda (row)
+           (matrix-*-vector cols row))
+         m)))
+
+; 2.38
+(define (fold-left op initial sequence)
+  (define (iter result rest)
+    (if (null? rest)
+        result
+        (iter (op result (car rest))
+              (cdr rest))))
+  (iter initial sequence))
+
+(define fold-right accumulate)
+
+; (fold-right / 1 (list 1 2 3)) -> 3/2
+; (fold-left / 1 (list 1 2 3))  -> 1/6
+; (fold-right list empty (list 1 2 3)) -> (1 (2 (3 ()))
+; (fold-left list empty (list 1 2 3))  -> (((() 1) 2) 3)
+
+; if (op a b) == (op b a)
+;   fold-right == fold-left
+
+(define (reverse-fold-right sequence)
+  (fold-right (lambda (x result)
+                (append result (list x)))
+              empty
+              sequence))
+
+(define (reverse-fold-left sequence)
+  (fold-left (lambda (result y)
+               (cons y result))
+             empty
+             sequence))
+
+; 2.40
+(define (flatmap proc seq)
+  (accumulate append empty (map proc seq)))
+
+(define (enumerate-interval low high)
+  (if (> low high)
+      empty
+      (cons low
+            (enumerate-interval (+ 1 low)
+                                high))))
+
+(define (unique-pairs n)
+  (flatmap (lambda (i)
+             (map (lambda (j)
+                    (list i j))
+                  (enumerate-interval 1 (- i 1))))
+           (enumerate-interval 1 n)))
+
+(define (make-pair-sum p)
+  (list (car p) (cadr p) (+ (car p) (cadr p))))
+
+(define (prime-sum? p)
+  (prime? (+ (car p) (cadr p))))
+
+(define (prime? n)
+  (define (iter i)
+    (cond ((> (square i) n) true)
+          ((= (remainder n i) 0) false)
+          (else (iter (+ i 1)))))
+  (iter 2))
+        
+(define (prime-sum-pairs n)
+  (map make-pair-sum
+       (filter prime-sum?
+               (unique-pairs n))))
+
+; 2.41
+(define (distinct-sum-triple n s)
+  (filter (lambda (p)
+            (= (accumulate + 0 p) s))
+          (flatmap (lambda (i)
+                     (flatmap (lambda (j)
+                                (map (lambda (k) (list i j k))
+                                     (enumerate-interval 1 (- j 1))))
+                              (enumerate-interval 1 (- i 1))))
+                   (enumerate-interval 1 n))))
+                       
+; 2.42
+(define (queens board-size)
+  (define (queen-cols k)
+    (if (= k 0)
+        (list empty-board)
+        (filter
+         (lambda (positions) (safe? k positions))
+         (flatmap
+          (lambda (rest-of-queens)
+            (map (lambda (new-row)
+                   (adjoin-position new-row k rest-of-queens))
+                 (enumerate-interval 1 board-size)))
+          (queen-cols (- k 1))))))
+  (queen-cols board-size))
+
+(define (queens-lr board-size)
+  (define (queen-cols k)
+    (if (= k 0)
+        (list empty-board)
+        (filter
+         (lambda (positions) (safe? k positions))
+         (flatmap
+          (lambda (new-row)
+            (map (lambda (rest-of-queens)
+                   (adjoin-position new-row k rest-of-queens))
+                 (queen-cols (- k 1))))
+          (enumerate-interval 1 board-size)))))
+  (queen-cols board-size))
+
+(define empty-board empty)
+(define (adjoin-position new-row k rest-of-queens)
+  (cons new-row rest-of-queens))
+
+(define (safe? k positions)
+  (let ((head (car positions)))
+    (define (iter i rest)
+      (if (null? rest)
+           true
+           (let ((c (car rest)))
+             (if (or (= head c)
+                     (= (+ head i) c)
+                     (= (- head i) c))
+                 false
+                 (iter (+ i 1) (cdr rest))))))
+    (iter 1 (cdr positions))))
+
+
+; 2.43
+; The complexity of Louis Reasoner is
+; T(k) = T(k-1) * b + size(T(k-1))*b
+; T(k) = b^k
+; While the complexity of the origin code is:
+; T(k) = T(k-1) + size(T(k-1)) * b
+; Therefore:
+; If the original code spends T time,
+; Then the new one spends 8^8 * T.
+
+
+
