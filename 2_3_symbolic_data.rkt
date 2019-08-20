@@ -372,4 +372,137 @@
          (lookup given-key (left-branch set-of-records)))
         ((> given-key (key (entry set-of-records)))
          (lookup given-key (right-branch set-of-records)))))
-              
+
+; 2.67
+(define (make-leaf symbol weight)
+  (list 'leaf symbol weight))
+
+(define (leaf? object)
+  (eq? (car object) 'leaf))
+
+(define symbol-leaf cadr)
+(define weight-leaf caddr)
+
+(define (make-code-tree left right)
+  (list left
+        right
+        (append (symbols left) (symbols right))
+        (+ (weight left) (weight right))))
+
+(define (symbols tree)
+  (if (leaf? tree)
+      (list (symbol-leaf tree))
+      (caddr tree)))
+
+(define (weight tree)
+  (if (leaf? tree)
+      (weight-leaf tree)
+      (cadddr tree)))
+
+(define (decode bits tree)
+  (define (decode-1 bits current-branch)
+    (if (null? bits)
+        '()
+        (let ((next-branch
+               (choose-branch (car bits) current-branch)))
+          (if (leaf? next-branch)
+              (cons (symbol-leaf next-branch)
+                    (decode-1 (cdr bits) tree))
+              (decode-1 (cdr bits) next-branch)))))
+  (decode-1 bits tree))
+
+(define left-branch2 car)
+(define right-branch2 cadr)
+(define (choose-branch bit branch)
+  (cond ((= bit 0) (left-branch2 branch))
+        ((= bit 1) (right-branch2 branch))
+        (else (error "bad bit -- CHOOSE BRANCH" bit))))
+
+(define (adjoin-set2 x set)
+  (cond ((null? set) (list x))
+        ((< (weight x) (weight (car set))) (cons x set))
+        (else (cons (car set)
+                    (adjoin-set2 x (cdr set))))))
+
+(define (make-leaf-set pairs)
+  (if (null? pairs)
+      '()
+      (let ((pair (car pairs)))
+        (adjoin-set2 (make-leaf (car pair)
+                                (cadr pair))
+                     (make-leaf-set (cdr pairs))))))
+
+(define sample-tree
+  (make-code-tree (make-leaf 'A 4)
+                  (make-code-tree
+                   (make-leaf 'B 2)
+                   (make-code-tree (make-leaf 'D 1)
+                                   (make-leaf 'C 1)))))
+
+;         .
+;       /   \
+;      A     .
+;           / \
+;          B   .
+;             / \
+;             D  C
+
+(define sample-message '(0 1 1 0 0 1 0 1 0 1 1 1 0))
+; ADABBCA
+
+; 2.68
+(define (encode message tree)
+  (if (null? message)
+      '()
+      (append (encode-symbol (car message) tree)
+              (encode (cdr message) tree))))
+
+(define (element-of-set2? x set)
+  (cond ((null? set) false)
+        ((eq? x (car set)) true)
+        (else (element-of-set2? x (cdr set)))))
+      
+(define (encode-symbol symbol tree)
+  (define (encode-1 result current-branch) 
+    (cond ((leaf? current-branch) (reverse result))
+          ((element-of-set2? symbol (symbols (left-branch2 current-branch)))
+           (encode-1 (cons 0 result) (left-branch2 current-branch)))
+          ((element-of-set2? symbol (symbols (right-branch2 current-branch)))
+           (encode-1 (cons 1 result) (right-branch2 current-branch)))
+          (else
+           (error "Symbol is not found -- ENCODE" symbol))))
+  (encode-1 '() tree))
+
+; 2.69
+(define (generate-huffman-tree pairs)
+  (successive-merge (make-leaf-set pairs)))
+
+(define (successive-merge nodes)
+  (if (= (length nodes) 1)
+      (car nodes) 
+      (successive-merge
+       (adjoin-set2 (make-code-tree (car nodes)
+                                    (cadr nodes))
+                    (cddr nodes)))))
+
+(define constructed-tree (generate-huffman-tree '((B 2) (C 1) (D 1) (A 4))))
+
+; 2.70
+(define lyrics-tree
+  (generate-huffman-tree
+   '((A 2) (BOOM 1) (GET 2) (JOB 2) (NA 16) (SHA 3) (YIP 9) (WAH 1))))
+
+(define lyrics-messages
+  (encode '(GET A JOB SHA NA NA NA NA NA NA NA NA GET A JOB SHA NA NA NA NA NA NA NA NA WAH YIP YIP YIP YIP YIP YIP YIP YIP YIP SHA BOOM)
+          lyrics-tree))
+; (length lyrics-messages): 84
+
+; 2.71
+; bits to encode the most frequent: 1
+; bits to encode the least frequence:
+;       1; (n = 1)
+;   n - 1; (n > 2)
+
+; 2.72
+; encode most: 2 O(1)
+; encode least: O(n^2)
