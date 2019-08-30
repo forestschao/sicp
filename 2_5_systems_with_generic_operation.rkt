@@ -209,3 +209,234 @@
 ; 2.86
 ; change the + in the complex number to be the generic function
 ; add, sub, mul, and div.
+
+; 2.87
+(define (add . x) ((apply-generic 'add) x))
+(define (negate x) ((apply-generic 'negate) x))
+
+(define (sub p1 p2)
+  (add p1 (negate p2)))
+
+(define (install-polynomial-package)
+  (define make-poly cons)
+  (define variable car)
+  (define term-list cadr)
+
+  (define order car)
+  (define coeff cadr)
+
+  (define (order-less? o1 o2)
+    (cond ((null? o1) false)
+          ((< (car o1) (car o2)) true)
+          ((> (car o1) (car o2)) false)
+          ((order-less? (cdr o1) (cdr o2)))))
+
+  (define (order-plus o1 o2)
+    (map + o1 o2))
+
+    (define (element-of? v L)
+    (cond ((null? L) false)
+          ((eq? v (car L)) true)
+          (else (element-of? v (cdr L)))))
+        
+  (define (expand-variables v1 v2)
+    (cond ((null? v2) v1)
+          ((element-of? (car v2) v1)
+           (expand-variables v1 (cdr v2)))
+          (else
+           (expand-variables (cons (car v2) v1)
+                             (cdr v2)))))
+
+  (define (expand-term origin all)
+    (lambda (t)
+      (make-term
+       (map (lambda (v)
+              (define (iter variables orders)
+                (cond ((null? variables) 0)
+                      ((eq? (car variables) v) (car orders))
+                      (else (iter (cdr variables)
+                                  (cdr orders)))))
+              (iter origin (order t)))
+            all)
+       (coeff t))))
+
+  (define (expand p1 all)
+    (make-poly all
+               (sort
+                (map (expand-term (variable p1) all) (term-list p1)))))
+
+  (define (sort terms)
+    (define (sort-one curr terms)
+      (cond ((null? terms) (list curr))
+            ((order-less? (order curr) (order (car terms)))
+             (cons (car terms) (sort-one curr (cdr terms))))
+            (else
+             (cons curr terms))))
+    (define (sort-all origin sorted)
+      (if (null? origin)
+          sorted
+          (sort-all (cdr origin)
+                    (sort-one (car origin)
+                              sorted))))
+    (sort-all terms '()))
+  
+  (define sparse-term-list term-list)
+  (define (dense-term-list p)
+    (define (iter terms curr result)
+      (cond ((< curr 0) result)
+            ((null? terms)
+             (iter terms (- curr 1) (cons 0 result)))
+            ((= (order (car terms)) curr)
+             (iter (cdr terms)
+                   (- curr 1)
+                   (cons (order (car terms)) result)))
+            (else
+             (iter terms (- curr 1) (cons 0 result)))))
+    (iter (term-list p) (order (car term-list p)) '()))
+  
+  (define (make-term order coeff)
+    (list order coeff))
+  
+  (define (=zero? poly)
+    (define (iter terms)
+      (cond ((null? terms) true)
+            ((= (car terms) 0) (iter (cdr terms)))
+            (else false)))
+    (iter (term-list poly)))
+
+  (define (negate poly)
+    (make-poly (variable poly)
+               (map negate (term-list poly))))
+  
+  'done)
+
+(define same-variable? eq?)
+(define mul *)
+
+;(define (install-polynomial-dense-package)
+  (define make-poly cons)
+  (define variable car)
+  (define term-list cadr)
+
+  (define empty-list? null?)
+  (define empty-termlist? null?)
+  (define the-empty-list '())
+  (define the-empty-termlist '())
+  (define rest-terms cdr)
+  (define order car)
+  (define coeff cadr)
+  (define first-term car)
+  (define div /)
+  (define (adjoin-term term term-list)
+    (cons term term-list))
+
+  (define dense-term-list term-list)
+
+  (define (make-term order coeff)
+    (list order coeff))
+
+  (define (sparse-term-list p)
+    (define (iter terms order result)
+      (if (null? terms)
+          result
+          (iter (cdr terms)
+                (+ order 1)
+                (cons (make-term order (car terms))
+                      result))))
+    (iter (term-list p) 0 '()))
+
+
+
+  (define (add-poly p1 p2)
+    (if (same-variable? (variable p1) (variable p2))
+        (make-poly (variable p1)
+                   (add-terms (dense-term-list p1)
+                              (dense-term-list p2)))
+        ;(let ((all-variables (expand-variables (variable p1)
+        ;                                       (variable p2))))
+        ;  (add-poly (expand p1 all-variables)
+        ;            (expand p2 all-variables)))))
+        (error "Polys not in same var -- ADD-POLY"
+               (list p1 p2))))
+
+  (define (add-terms t1 t2)
+    (cond ((null? t1) t2)
+          ((null? t2) t1)
+          (else
+           (cons (+ (car t1) (car t2))
+                 (add-terms (cdr t1) (cdr t2))))))
+
+  (define (mul-poly p1 p2)
+    (if (same-variable? (variable p1) (variable p2))
+        (make-poly (variable p1)
+                   (mul-terms (dense-term-list p1)
+                              (dense-term-list p2)))
+        (error "Polys not in same var -- MUL-POLY"
+               (list p1 p2))))
+  
+ ; (define (mul-terms t1 t2)
+ ;   (if (null? t1)
+ ;       '()
+ ;       (add-terms (mul-term-by-all-terms (first-term t1) t2)
+ ;                  (cons 0 (mul-terms (cdr t1) t2)))))
+ ; (define (mul-term-by-all-terms t1 L)
+ ;   (if (null? L)
+ ;       '()
+ ;       (map (lambda (x) (mul t1 x)) L)))
+
+  (define (mul-terms L1 L2)
+  (if (empty-termlist? L1)
+      (the-empty-termlist)
+      (add-terms (mul-term-by-all-terms (first-term L1) L2)
+                 (mul-terms (rest-terms L1) L2))))
+
+(define (mul-term-by-all-terms t1 L)
+  (if (empty-termlist? L)
+      (the-empty-termlist)
+      (let ((t2 (first-term L)))
+        (adjoin-term
+         (make-term (+ (order t1) (order t2))
+                    (mul (coeff t1) (coeff t2)))
+         (mul-term-by-all-terms t1 (rest-terms L))))))
+  ; 2.91
+  (define (div-terms L1 L2)
+  (if (empty-list? L1)
+      (list (the-empty-list) (the-empty-list))
+      (let ((t1 (first-term L1))
+            (t2 (first-term L2)))
+        (if (> (order t2) (order t1))
+            (list (the-empty-list) L1)
+            (let ((new-c (div (coeff t1) (coeff t2)))
+                  (new-o (- (order t1) (order t2))))
+              (let ((rest-of-result
+                     (div-terms (sub L1
+                                     (mul-term-by-all-terms (make-term new-o new-c) L2))
+                                L2)))
+                (list (cons (make-term (new-o new-c))
+                            (car rest-of-result))
+                      (cadr (rest-of-result)))))))))
+   (define (gcd-terms a b)
+     (if (empty-list? b)
+         a
+         (gcd-terms b (cadr (div-terms a b)))))
+
+;  'done)
+
+; 1 + 2x + 3x^2
+; 4x + 5x^3
+; 4x + 8x^2 + 17x^3 + 10x^4 + 15x^5
+
+; 5x + 2
+; (((1) 5) ((0) 2))
+; xy + 1
+; (((1 1) 1) ((0 0) 1))
+; 2x^2 + 3xy + 4z
+; (((1 0 0) 2) ((1 1 0) 3) ((0 0 1) 4))
+(define p1 '((x) (((1) 5) ((0) 2))))
+(define p2 '((x y) (((1 1) 1) ((0 0) 1))))
+(define p3 '((x y z) (((1 0 0) 2) ((1 1 0) 3) ((0 0 1) 4))))
+
+(define l1 '((x) ((4 1) (3 -1) (2 -2) (1 2))))
+(define l2 '((x) ((3 1) (1 -1))))
+
+
